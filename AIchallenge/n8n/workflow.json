@@ -1,0 +1,137 @@
+{
+  "name": "DevTest",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "9e93beb2-b991-4586-b917-dbe5d439f226",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "filePath": "/data/ads_spend.csv"
+      },
+      "id": "b7468c34-f209-4250-ab75-da9cb87e0ae9",
+      "name": "Read Binary File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        464,
+        -176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.raw_ads_spend (\n  date, platform, account, campaign, country, device,\n  spend, clicks, impressions, conversions, source_file\n) VALUES (\n  CAST('{{$json[\"date\"]}}' AS date),\n  '{{$json[\"platform\"]}}',\n  '{{$json[\"account\"]}}',\n  '{{$json[\"campaign\"]}}',\n  '{{$json[\"country\"]}}',\n  '{{$json[\"device\"]}}',\n  {{$json[\"spend\"]}}::numeric,\n  {{$json[\"clicks\"]}}::int,\n  {{$json[\"impressions\"]}}::bigint,\n  {{$json[\"conversions\"]}}::int,\n  '{{$json[\"source_file\"]}}'\n)\nON CONFLICT (date, platform, account, campaign, country, device)\nDO UPDATE SET\n  spend = EXCLUDED.spend,\n  clicks = EXCLUDED.clicks,\n  impressions = EXCLUDED.impressions,\n  conversions = EXCLUDED.conversions,\n  source_file = EXCLUDED.source_file,\n  load_date = now();",
+        "options": {}
+      },
+      "id": "0180333b-f542-43d3-8ca1-af329efd7d21",
+      "name": "Postgres (UPSERT)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1136,
+        -176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "oRE29AzCnrVn2WMu",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {
+          "delimiter": ",",
+          "headerRow": true
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        672,
+        -176
+      ],
+      "id": "1ab4b0e1-257e-4f3e-9ad2-5044f38e7197",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map(item => {\n  const j = item.json;\n  return {\n    json: {\n      date: j.date,\n      platform: String(j.platform),\n      account: String(j.account),\n      campaign: String(j.campaign),\n      country: String(j.country),\n      device: String(j.device),\n      spend: parseFloat(j.spend),\n      clicks: parseInt(j.clicks),\n      impressions: parseInt(j.impressions),\n      conversions: parseInt(j.conversions),\n      source_file: 'ads_spend.csv'\n    }\n  }\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        -176
+      ],
+      "id": "d5da11bb-bbce-4223-a60b-3435f97bf1b0",
+      "name": "Code"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Read Binary File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Binary File": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Postgres (UPSERT)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "22caca96-daea-4181-aee7-53183a4cbe3a",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "f10bcbda0db1990611fa4cc5b892cb47ac0ae92a203bfc1220699d3d2909b73c"
+  },
+  "id": "BlD1HOCMbExEX7Aq",
+  "tags": []
+}
