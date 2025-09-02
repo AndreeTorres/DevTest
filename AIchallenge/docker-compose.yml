@@ -1,0 +1,24 @@
+services:
+  n8n:
+    image: n8nio/n8n:stable
+    container_name: ads_n8n
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=admin123
+      # Config DB externa (tu Postgres local)
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=host.docker.internal
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=warehouse
+      - DB_POSTGRESDB_USER=analytics
+      - DB_POSTGRESDB_PASSWORD=analytics
+      # Opcional: zona horaria coherente
+      - GENERIC_TIMEZONE=America/Mexico_City
+    volumes:
+      # Montamos el folder con el workflow y el CSV
+      - ./n8n:/files
+      - ./data:/data:ro
