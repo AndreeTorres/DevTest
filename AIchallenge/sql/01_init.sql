@@ -1,4 +1,4 @@
--- sql/01_init.sql
+
 -- Base schema for the challenge: raw table + KPIs view
 
 -- 1) Raw table with metadata and unique index for idempotency

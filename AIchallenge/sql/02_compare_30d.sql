@@ -1,4 +1,4 @@
--- sql/02_compare_30d.sql
+-- Part 2 of the challenge
 
 -- Define dates based on max date in dataset
 WITH bounds AS (
