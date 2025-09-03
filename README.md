@@ -2,7 +2,7 @@
 
 This project demonstrates a complete data engineering pipeline built with modern tools and best practices. It showcases how to set up an automated data processing environment using PostgreSQL as a data warehouse and n8n as a workflow orchestration platform, all containerized with Docker.
 
-## 📋 What This Project Does
+##  What This Project Does
 
 This data engineering challenge implements:
 
@@ -25,11 +25,7 @@ AIchallenge/
 ├── dbdata/                    # PostgreSQL data persistence directory
 ├── n8n/                      # n8n workflow data and configurations
 └── sql/                      # SQL scripts for database setup and analytics
-    ├── 01_init.sql           # Database initialization
-    ├── 02_create_tables.sql  # Table schemas
-    ├── 03_load_data.sql      # Data loading procedures
-    ├── 04_transformations.sql # ETL transformations
-    └── 05_analytics.sql      # Business intelligence queries
+ queries
 ```
 
 ## Technologies Used
@@ -120,7 +116,219 @@ curl http://localhost:5678/rest/login
 3. Create your owner account with any username and password you prefer
 4. Use those credentials to log in
 
-##  What Each File Does
+## 🔄 Using the DevTest Workflow
+
+This project includes a pre-configured n8n workflow that automates the entire data ingestion process from CSV to PostgreSQL.
+
+### Workflow Components
+
+The **DevTest** workflow (`n8n/workflow.json`) implements a complete ETL pipeline:
+
+```
+Manual Trigger → Read CSV File → Extract Data → Transform Data → Load to PostgreSQL
+```
+
+### Step-by-Step Process
+
+1. **Manual Trigger**: Start the workflow manually from n8n interface
+2. **File Reading**: Automatically reads `ads_spend.csv` from the `/data` directory
+3. **Data Extraction**: Parses CSV with proper headers and delimiter handling
+4. **Data Transformation**: 
+   - Converts data types (date, numeric, integer)
+   - Validates data integrity
+   - Adds source file metadata
+5. **Database Loading**: Uses UPSERT strategy to handle duplicates
+
+### How to Run the Workflow
+
+1. **Access n8n**: Open http://localhost:5678 and log in
+2. **Import Workflow**: The workflow should already be available as "DevTest"
+3. **Configure Database Connection**: 
+   - Set up PostgreSQL credentials in n8n
+   - Host: `postgres-warehouse`
+   - Database: `warehouse`
+   - Username: `analytics`
+   - Password: `analytics`
+4. **Execute Workflow**: Click "Execute Workflow" or use the manual trigger
+5. **Monitor Progress**: Watch each node execute and verify data loading
+
+### Database Schema Expected
+
+The workflow expects this table structure in PostgreSQL:
+
+```sql
+CREATE TABLE raw_ads_spend (
+    date DATE,
+    platform VARCHAR(50),
+    account VARCHAR(100),
+    campaign VARCHAR(200),
+    country VARCHAR(50),
+    device VARCHAR(50),
+    spend NUMERIC(10,2),
+    clicks INTEGER,
+    impressions BIGINT,
+    conversions INTEGER,
+    source_file VARCHAR(100),
+    load_date TIMESTAMP DEFAULT NOW(),
+    UNIQUE(date, platform, account, campaign, country, device)
+);
+```
+
+## 🗄️ Database Initialization & Setup
+
+After running the workflow, you need to ensure the database is properly initialized with the required tables and structure.
+
+### Required Database Setup
+
+The project expects the following database configuration:
+
+1. **Database**: `warehouse`
+2. **User**: `analytics` with appropriate permissions
+3. **Tables**: Properly structured tables for advertising data
+
+### Database Schema Requirements
+
+The main table structure needed for the analytics is already defined in the workflow section above. Make sure this table exists before running analytics queries.
+
+### Initializing the Database
+
+```bash
+# Connect to PostgreSQL container
+docker exec -it postgres-warehouse psql -U analytics -d warehouse
+
+# Verify table exists
+\dt
+
+# If needed, create the table manually using the schema above
+```
+
+## 📊 Data Analytics & KPI Analysis
+
+This project includes advanced SQL analytics for advertising performance measurement and optimization.
+
+### Performance Comparison Analysis
+
+**File: `sql/02_compare_30d.sql`**
+
+This sophisticated analytics query provides period-over-period comparison of advertising performance:
+
+#### Key Features:
+- **Time-based Analysis**: Compares last 30 days vs previous 30 days
+- **Dynamic Date Calculation**: Automatically determines periods based on latest data
+- **Advanced Metrics Calculation**:
+  - **CAC (Customer Acquisition Cost)**: `spend ÷ conversions`
+  - **ROAS (Return on Ad Spend)**: `revenue ÷ spend` 
+  - **Revenue Estimation**: `conversions × $100` (configurable value)
+  
+#### Technical Implementation:
+- **CTEs (Common Table Expressions)**: Modular query structure for maintainability
+- **Self-Join Technique**: Compares different time periods in single result set
+- **Null Handling**: Uses `NULLIF()` to prevent division by zero errors
+- **Percentage Deltas**: Calculates period-over-period change percentages
+
+#### Business Value:
+- **Performance Trends**: Identify if campaigns are improving or declining
+- **Budget Optimization**: Lower CAC indicates better targeting efficiency  
+- **ROI Measurement**: Higher ROAS shows improved campaign profitability
+- **Data-Driven Decisions**: Quantitative metrics for strategy adjustments
+
+#### Sample Output:
+```sql
+-- Expected result structure:
+period   | spend   | conversions | cac    | roas  | delta_cac_pct | delta_roas_pct
+---------|---------|-------------|--------|-------|---------------|---------------
+cur_30d  | 15000.00| 150        | 100.00 | 1.00  | -16.67        | 20.00
+prev_30d | 18000.00| 150        | 120.00 | 0.83  | NULL          | NULL
+```
+
+### Running Analytics Queries
+
+1. **Access Database**:
+   ```bash
+   docker exec -it postgres-warehouse psql -U analytics -d warehouse
+   ```
+
+2. **Execute Analysis**:
+   ```sql
+   \i sql/02_compare_30d.sql
+   ```
+
+3. **Interpret Results**:
+   - Negative delta_cac_pct = Cost efficiency improved
+   - Positive delta_roas_pct = Return on investment increased
+   - Use metrics to guide campaign optimization strategies
+
+## Parametrizable Date Window Analysis
+
+**#File: `sql/03_metrics_window.sql`**
+
+This flexible analytics script allows custom date range analysis with parametrizable start and end dates:
+
+#### Key Features:
+- **Custom Date Ranges**: Accept start and end date parameters for flexible analysis
+- **Multi-level Aggregation**: Provides both total metrics and platform-specific breakdowns
+- **Same KPIs as Comparison**: Consistent CAC, ROAS, spend, conversions, and revenue calculations
+- **Dynamic Filtering**: Uses PostgreSQL parameters (`:start` and `:end`) for date window specification
+
+#### Technical Implementation:
+- **Parameter Handling**: Uses `:'start'::date` and `:'end'::date` for runtime date injection
+- **Cross Join Technique**: Efficiently applies date filters across the dataset
+- **Dual Output Structure**: 
+  - `TOTAL` level: Aggregated metrics across all platforms
+  - `PLATFORM` level: Individual platform performance breakdown
+- **Consistent Precision**: Uses `numeric(18,2)` for financial calculations
+
+#### Business Value:
+- **Flexible Reporting**: Analyze any custom date range (weekly, monthly, quarterly, yearly)
+- **Campaign-specific Analysis**: Focus on specific time periods like product launches or seasonal campaigns
+- **Platform Comparison**: Compare performance across different advertising platforms
+- **Historical Analysis**: Examine performance trends over custom historical periods
+
+#### Sample Usage:
+```bash
+# Analyze march 2025 performance
+docker run -it --rm --network host -v "$PWD/sql":/sql postgres:15 \
+  psql "postgresql://analytics:analytics@localhost:5432/warehouse" \
+  -v start='2025-03-01' -v end='2025-03-31' -f /sql/03_metrics_window.sql
+
+
+#### Sample Output:
+```sql
+-- Expected result structure:
+  level   |  key   |   spend   | conversions |  revenue  |  cac  | roas 
+----------+--------+-----------+-------------+-----------+-------+------
+ PLATFORM | Google | 137032.34 |        4633 | 463300.00 | 29.58 | 3.38
+ PLATFORM | Meta   | 132754.15 |        4219 | 421900.00 | 31.47 | 3.18
+ TOTAL    | ALL    | 269786.49 |        8852 | 885200.00 | 30.48 | 3.28
+```
+
+
+
+## Running Analytics Queries
+
+1. **Access Database**:
+   ```bash
+   docker exec -it postgres-warehouse psql -U analytics -d warehouse
+   ```
+
+2. **Execute Period Comparison**:
+   ```sql
+   \i sql/02_compare_30d.sql
+   ```
+
+3. **Execute Custom Date Range Analysis**:
+   ```bash
+   # From terminal (outside PostgreSQL)
+   docker run -it --rm --network host -v "$PWD/sql":/sql postgres:15 \
+     psql "postgresql://analytics:analytics@localhost:5432/warehouse" \
+     -v start='2024-08-01' -v end='2024-08-31' -f /sql/03_metrics_window.sql
+   ```
+
+4. **Interpret Results**:
+   - **02_compare_30d.sql**: Negative delta_cac_pct = Cost efficiency improved, Positive delta_roas_pct = ROI increased
+   - **03_metrics_window.sql**: Compare TOTAL vs PLATFORM metrics to identify top-performing channels
+   - Use metrics to guide campaign optimization and budget allocation strategies
+## What Each File Does
 
 ### `docker-compose.yml`
 Defines two services:
@@ -140,14 +348,40 @@ Contains SQL scripts for:
 - Table creation for raw and transformed data
 - Data loading procedures from CSV
 - ETL transformation logic
-- Analytics and reporting queries
+- **Analytics and reporting queries**
+
+#### Available SQL Analytics Files
+
+**`02_compare_30d.sql`** - 30-Day Performance Comparison
+- Compares advertising KPIs between current 30 days vs previous 30 days
+- Calculates key metrics: CAC (Customer Acquisition Cost), ROAS (Return on Ad Spend)
+- Provides percentage deltas to identify performance trends
+- Uses advanced SQL techniques: CTEs, window functions, self-joins
+- Output includes period-over-period analysis for campaign optimization
 
 ### `n8n/` Directory
 Stores n8n configuration and workflow data:
-- Workflow definitions (JSON format)
-- Node configurations
-- Credentials and connections
+- **workflow.json**: Complete ETL workflow for processing ads_spend.csv data
+- Node configurations and credentials
 - Execution logs and history
+
+#### DevTest Workflow Overview
+The `workflow.json` file contains a complete data pipeline with the following nodes:
+
+1. **Manual Trigger**: Initiates the workflow manually for data processing
+2. **Read Binary File**: Reads the `/data/ads_spend.csv` file from the container
+3. **Extract from File**: Parses CSV data with headers and comma delimiter
+4. **Code Node**: Data transformation and validation:
+   - Converts data types (strings, numbers, integers)
+   - Adds source file tracking
+   - Validates data format
+5. **Postgres (UPSERT)**: Inserts data into `raw_ads_spend` table with conflict resolution
+
+**Key Features:**
+- **UPSERT Logic**: Handles duplicate records by updating existing data
+- **Data Type Validation**: Ensures proper casting for database storage
+- **Source Tracking**: Adds metadata about data origin
+- **Error Handling**: Robust pipeline with proper data validation
 
 ## 🔧 Common Issues When Copying This Project
 
@@ -207,6 +441,35 @@ docker-compose logs -f n8n
 # 3. Use those credentials instead of admin/admin123
 ```
 
+### Problem: DevTest workflow fails to execute
+```bash
+# Solution 1: Check PostgreSQL connection
+docker-compose logs postgres-warehouse
+
+# Solution 2: Verify CSV file exists
+docker exec -it n8n ls -la /data/ads_spend.csv
+
+# Solution 3: Check n8n credentials for PostgreSQL
+# In n8n interface: Settings → Credentials → Postgres account
+# Ensure: Host=postgres-warehouse, Database=warehouse, User=analytics
+
+# Solution 4: Verify table exists
+docker exec -it postgres-warehouse psql -U analytics -d warehouse -c "\dt"
+```
+
+### Problem: Workflow executes but no data appears in database
+```bash
+# Check if table exists and has correct structure
+docker exec -it postgres-warehouse psql -U analytics -d warehouse -c "
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'raw_ads_spend';"
+
+# Check if data was actually inserted
+docker exec -it postgres-warehouse psql -U analytics -d warehouse -c "
+SELECT COUNT(*) FROM raw_ads_spend;"
+```
+
 ## How to Explore the Project
 
 ### 1. Database Exploration
@@ -222,14 +485,35 @@ SELECT * FROM your_table LIMIT 5;  # View sample data
 
 ### 2. n8n Workflow Exploration
 1. Open http://localhost:5678 in your browser
-2. Login with admin/admin123
-3. Explore existing workflows
-4. Check execution history
-5. Monitor data processing
+2. Login with your created credentials
+3. **DevTest Workflow**: 
+   - View the complete ETL pipeline
+   - Test individual nodes
+   - Monitor execution history
+   - Check data transformation logic
+4. **Workflow Features**:
+   - Manual trigger for on-demand processing
+   - CSV parsing with data validation
+   - PostgreSQL UPSERT operations
+   - Error handling and logging
+5. **Testing the Workflow**:
+   - Click "Execute Workflow" to run the complete pipeline
+   - Monitor each node's output
+   - Verify data loaded correctly in PostgreSQL
 
-### 3. Data Analysis
-- Review SQL files in `sql/` directory
-- Run analytics queries to understand the data
-- Examine transformation logic
-- Check data quality procedures
+### 3. Data Analysis & KPI Exploration
+- **Review SQL Analytics**: Examine `sql/02_compare_30d.sql` for advanced analysis patterns
+- **Run Performance Comparisons**: Execute period-over-period analysis queries  
+- **Examine Transformation Logic**: Understand CAC and ROAS calculation methodologies
+- **Validate Data Quality**: Check data consistency and transformation accuracy
+- **Business Intelligence**: Use metrics for campaign optimization insights
 
+#### Running the 30-Day Comparison Analysis:
+```bash
+# Connect to database and run analytics
+docker exec -it postgres-warehouse psql -U analytics -d warehouse -f sql/02_compare_30d.sql
+
+# Or run interactively
+docker exec -it postgres-warehouse psql -U analytics -d warehouse
+warehouse=# \i sql/02_compare_30d.sql
+```
